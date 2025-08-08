@@ -1,0 +1,90 @@
+{
+  "validation_rules": {
+    "required_files": [
+      "cdf-meta.json"
+    ],
+    "required_fields": {
+      "cdf-meta.json": [
+        "cdf_version",
+        "pattern",
+        "files"
+      ]
+    },
+    "attestation_fields": {
+      "required": [
+        "_type",
+        "subject",
+        "predicateType",
+        "predicate"
+      ],
+      "expected_values": {
+        "_type": "https://in-toto.io/Statement/v0.1",
+        "predicateType": "https://slsa.dev/provenance/v0.2"
+      }
+    },
+    "file_extensions": {
+      "terraform": [".tf", ".tfvars", ".hcl"],
+      "json": [".json"],
+      "yaml": [".yml", ".yaml"],
+      "markdown": [".md"]
+    },
+    "security": {
+      "max_file_size_mb": 50,
+      "allowed_hash_algorithms": ["sha256"],
+      "require_signatures": true,
+      "prevent_unauthorized_tf": true
+    }
+  },
+  "validation_levels": {
+    "basic": {
+      "description": "Basic validation - structure and integrity only",
+      "checks": [
+        "cdf_structure",
+        "file_integrity",
+        "unauthorized_tf_detection"
+      ]
+    },
+    "full": {
+      "description": "Full validation - includes signature verification",
+      "checks": [
+        "cdf_structure",
+        "file_integrity",
+        "unauthorized_tf_detection",
+        "attestation_structure",
+        "signature_verification"
+      ]
+    },
+    "strict": {
+      "description": "Strict validation - enhanced security checks",
+      "checks": [
+        "cdf_structure",
+        "file_integrity",
+        "unauthorized_tf_detection",
+        "attestation_structure",
+        "signature_verification",
+        "file_size_limits",
+        "hash_algorithm_validation"
+      ]
+    }
+  },
+  "error_messages": {
+    "file_not_found": "Required file not found: {file}",
+    "hash_mismatch": "Hash mismatch for {file} - file may have been tampered with",
+    "unauthorized_tf": "Unauthorized Terraform file found: {file} - not part of signed CDF pattern",
+    "invalid_json": "Invalid JSON in {file}",
+    "missing_field": "Missing required field '{field}' in {file}",
+    "signature_failed": "Signature verification failed for {file}",
+    "attestation_invalid": "Invalid attestation structure in {file}"
+  },
+  "github_integration": {
+    "comment_template": {
+      "success": "✅ CDF validation passed - {file_count} files validated successfully",
+      "failure": "❌ CDF validation failed - {error_count} errors found",
+      "summary": "## CDF Validation Results\n\n**Status**: {status}\n**Files Validated**: {file_count}\n**Errors**: {error_count}\n\n{details}"
+    },
+    "status_checks": {
+      "name": "cdf-validation",
+      "description": "Validates CDF pattern integrity and signatures"
+    }
+  }
+} 

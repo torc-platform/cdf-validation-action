@@ -1,0 +1,32 @@
+name: 'Kickstart CDF Validation'
+description: 'Validate CDF pattern integrity, file signatures, and prevent unauthorized Terraform files'
+
+inputs:
+  cdf_path:
+    description: 'Path to CDF pattern directory (auto-detected if not specified)'
+    required: false
+    default: ''
+  validation_level:
+    description: 'Validation level: basic, full, or strict'
+    required: false
+    default: 'full'
+  fail_on_unauthorized_tf:
+    description: 'Fail if unauthorized Terraform files are found'
+    required: false
+    default: 'true'
+  skip_signature_validation:
+    description: 'Skip signature validation (for testing only)'
+    required: false
+    default: 'false'
+
+outputs:
+  validation_status:
+    description: 'Validation result: passed, failed, or skipped'
+  error_count:
+    description: 'Number of validation errors found'
+  file_count:
+    description: 'Number of files validated'
+
+runs:
+  using: 'node20'
+  main: 'dist/index.js' 

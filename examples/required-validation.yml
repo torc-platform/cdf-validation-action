@@ -1,0 +1,54 @@
+name: Required CDF Validation
+
+on:
+  pull_request:
+    paths:
+      - '**/*-cdf.*'
+      - '**/cdf-*'
+      - '**/cdf-meta.json'
+      - '**/composition-cdf.json'
+    types: [opened, synchronize, reopened]
+  workflow_dispatch:
+    inputs:
+      cdf_path:
+        description: 'Path to CDF pattern directory'
+        required: false
+        default: ''
+
+permissions:
+  contents: read
+  pull-requests: write
+
+jobs:
+  validate-cdf:
+    name: Validate CDF Pattern
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Validate CDF Pattern
+        uses: ./.github/actions/kickstart-validate-action
+        with:
+          cdf_path: ${{ github.event.inputs.cdf_path || '' }}
+          validation_level: 'full'
+          fail_on_unauthorized_tf: 'true'
+          skip_signature_validation: 'false'
+        id: validation
+
+      - name: Check validation status
+        if: steps.validation.outputs.validation_status == 'failed'
+        run: |
+          echo "❌ CDF validation failed with ${{ steps.validation.outputs.error_count }} errors"
+          echo "Please review the validation results and fix any issues before merging."
+          exit 1
+
+      - name: Validation passed
+        if: steps.validation.outputs.validation_status == 'passed'
+        run: |
+          echo "✅ CDF validation passed"
+          echo "Files validated: ${{ steps.validation.outputs.file_count }}"
+          echo "Ready for merge!" 

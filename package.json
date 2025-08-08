@@ -1,0 +1,16 @@
+{
+  "name": "kickstart-validate-action",
+  "version": "1.0.0",
+  "description": "Validate CDF pattern integrity and signatures",
+  "main": "dist/index.js",
+  "scripts": {
+    "build": "ncc build src/index.js -o dist",
+    "prepare": "npm run build"
+  },
+  "dependencies": {
+    "@actions/core": "^1.10.0"
+  },
+  "devDependencies": {
+    "@vercel/ncc": "^0.38.0"
+  }
+} 
