@@ -49,6 +49,13 @@ runs:
           echo "$RUNNER_TEMP/bin" >> "$GITHUB_PATH"
         fi
 
+    - name: Cosign version (diagnostic)
+      shell: bash
+      run: |
+        echo "PATH=$PATH"
+        command -v cosign || true
+        cosign version || true
+
     - name: Run validation
       id: run-validate
       shell: bash
