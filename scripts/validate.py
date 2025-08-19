@@ -153,7 +153,14 @@ def main():
                         print(f"Missing signature reference in metadata for {name}")
                         signature_errors += 1
                         continue
-                    blob = cdf_path / name
+                    # Prefer verifying the attestation JSON blob if present; signatures were created for attestations
+                    att_json = None
+                    if sig_path.endswith('.attestation.sig'):
+                        candidate = (cdf_path / sig_path).with_suffix('')  # remove .sig
+                        candidate = candidate.with_suffix('.json')          # .attestation.json
+                        if candidate.exists():
+                            att_json = candidate
+                    blob = att_json if att_json is not None else (cdf_path / name)
                     sig = cdf_path / sig_path
                     cert = sig.with_suffix('.cert')
                     if not sig.exists():
