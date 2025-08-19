@@ -125,20 +125,20 @@ def main():
                 continue
             p = cdf_path / name
             if not p.exists():
-                print(f"Missing file listed in metadata: {name}")
+                print(f"❌ Missing file listed in metadata: {name}")
                 unauthorized_errors += 1
                 continue
             actual = sha256_file(p)
             if actual != expected:
-                print(f"Hash mismatch for {name}: expected {expected}, got {actual}")
+                print(f"❌ Hash mismatch for {name}: expected {expected}, got {actual}")
                 unauthorized_errors += 1
             else:
-                print(f"Hash matches for {name}")
+                print(f"✅ Hash matches for {name}")
 
         # Signature verification with cosign over attestation JSONs
         if args.skip_signature_validation.lower() != 'true':
             if not is_cosign_available():
-                print('cosign not available; signature validation required but tool missing')
+                print('❌ cosign not available; signature validation required but tool missing')
                 signature_errors += 1
             else:
                 # Enumerate all attestation JSONs, validate structure, and verify signatures
@@ -146,17 +146,17 @@ def main():
                 attested_passed = 0
                 for att in sorted(cdf_path.rglob('*.attestation.json')):
                     attested_total += 1
-                    print(f"Validating attestation: {att.relative_to(cdf_path)}")
+                    print(f"🔁Validating attestation: {att.relative_to(cdf_path)}")
                     try:
                         obj = json.loads(att.read_text())
                         for req in ["_type", "subject", "predicateType", "predicate"]:
                             if req not in obj:
-                                print(f"Attestation missing field {req}: {att.relative_to(cdf_path)}")
+                                print(f"❌ Attestation missing field {req}: {att.relative_to(cdf_path)}")
                                 signature_errors += 1
                             else:
                                 print(f"✅ Found required attestation field: {req}")
                     except Exception as e:
-                        print(f"Invalid attestation JSON {att.relative_to(cdf_path)}: {e}")
+                        print(f"❌ Invalid attestation JSON {att.relative_to(cdf_path)}: {e}")
                         signature_errors += 1
                         continue
                     sig = att.with_suffix('.sig')
