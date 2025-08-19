@@ -69,9 +69,7 @@ def main():
     ap.add_argument('--cert-issuer-regex', default='.*')
     ap.add_argument('--insecure-ignore-tlog', default='true')
     ap.add_argument('--public-key', default='')
-    ap.add_argument('--verbose', default='false')
     args = ap.parse_args()
-    verbose = args.verbose.lower() == 'true'
 
     cdf_path = find_cdf_path(args.cdf_path)
     if not cdf_path or not cdf_path.exists():
@@ -134,7 +132,7 @@ def main():
             if actual != expected:
                 print(f"Hash mismatch for {name}: expected {expected}, got {actual}")
                 unauthorized_errors += 1
-            elif verbose:
+            else:
                 print(f"Hash matches for {name}")
 
         # Signature verification with cosign over attestation JSONs
@@ -148,15 +146,14 @@ def main():
                 attested_passed = 0
                 for att in sorted(cdf_path.rglob('*.attestation.json')):
                     attested_total += 1
-                    if verbose:
-                        print(f"Validating attestation: {att.relative_to(cdf_path)}")
+                    print(f"Validating attestation: {att.relative_to(cdf_path)}")
                     try:
                         obj = json.loads(att.read_text())
                         for req in ["_type", "subject", "predicateType", "predicate"]:
                             if req not in obj:
                                 print(f"Attestation missing field {req}: {att.relative_to(cdf_path)}")
                                 signature_errors += 1
-                            elif verbose:
+                            else:
                                 print(f"✅ Found required attestation field: {req}")
                     except Exception as e:
                         print(f"Invalid attestation JSON {att.relative_to(cdf_path)}: {e}")
