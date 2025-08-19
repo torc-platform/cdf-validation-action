@@ -183,6 +183,8 @@ def main():
                             print(f"Failed to write public key: {e}")
                     # FILE positional must be last
                     cmd = ' '.join(cmd_parts + [f"{blob}"])
+                    # FILE must be the final positional argument
+                    cmd_parts.append(str(blob))
                     res = run(cmd_parts)
                     if res.returncode != 0:
                         print(f"Signature verification failed for {name}:\n{res.stdout}")
