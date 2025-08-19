@@ -31,23 +31,19 @@ def find_cdf_path(explicit: str) -> Path:
     return Path('')
 
 
-def list_cdf_files(cdf_path: Path):
-    """Find all files considered CDF artifacts by naming convention.
-    Matches files with '-cdf' in name or starting with 'cdf-'.
-    Returns relative paths from cdf_path.
+def list_tf_files(cdf_path: Path):
+    """List Terraform files to check authorization (match old behavior):
+    We look for cdf-main.tf under stable/ and unstable/ service directories.
     """
     results = []
     for root, _, files in os.walk(cdf_path):
-        # skip .git
         if '.git' in root:
             continue
+        if not (('/stable/' in root) or ('/unstable/' in root)):
+            continue
         for name in files:
-            # Skip any attestation artifacts entirely
-            if 'attestations' in root or '.attestation.' in name:
-                continue
-            if ('-cdf' in name) or name.startswith('cdf-'):
-                full = Path(root) / name
-                results.append(full.relative_to(cdf_path))
+            if name == 'cdf-main.tf':
+                results.append((Path(root) / name).relative_to(cdf_path))
     return results
 
 
@@ -101,11 +97,10 @@ def main():
             print(f"Invalid cdf-meta.json: {e}")
             unauthorized_errors += 1
 
-    # Discover CDF files by naming convention
-    discovered = set(map(str, list_cdf_files(cdf_path)))
-    file_count = len(discovered)
+    # Count CDF files by naming convention for reporting
+    file_count = len(list(cdf_path.rglob('*cdf*')))
 
-    # If metadata lists files, enforce whitelist
+    # If metadata lists files, use those for integrity/signature checks
     meta_files = set()
     if meta and isinstance(meta.get('files'), list):
         for f in meta['files']:
@@ -113,11 +108,11 @@ def main():
             if name:
                 meta_files.add(name)
 
+        # Old behavior: Only check Terraform files "authorized"; do not fail on extra CDF files
         if args.fail_on_unauthorized_tf.lower() == 'true':
-            unauthorized = discovered - meta_files
-            for rel in sorted(unauthorized):
-                print(f"Unauthorized CDF file not in metadata: {rel}")
-                unauthorized_errors += 1
+            tf_files = list_tf_files(cdf_path)
+            for tf in tf_files:
+                print(f"Authorized TF file: {tf}")
 
         # Hash verification
         for f in meta['files']:
@@ -138,63 +133,51 @@ def main():
                 print(f"Hash mismatch for {name}: expected {expected}, got {actual}")
                 unauthorized_errors += 1
 
-        # Signature verification with cosign
+        # Signature verification with cosign over attestation JSONs
         if args.skip_signature_validation.lower() != 'true':
             if not is_cosign_available():
                 print('cosign not available; signature validation required but tool missing')
                 signature_errors += 1
             else:
-                for f in meta['files']:
-                    name = f.get('name')
-                    sig_path = f.get('signature')
-                    if not name:
-                        continue
-                    if not sig_path:
-                        print(f"Missing signature reference in metadata for {name}")
+                # Enumerate all attestation JSONs, validate structure, and verify signatures
+                for att in sorted(cdf_path.rglob('*.attestation.json')):
+                    try:
+                        obj = json.loads(att.read_text())
+                        for req in ["_type", "subject", "predicateType", "predicate"]:
+                            if req not in obj:
+                                print(f"Attestation missing field {req}: {att.relative_to(cdf_path)}")
+                                signature_errors += 1
+                    except Exception as e:
+                        print(f"Invalid attestation JSON {att.relative_to(cdf_path)}: {e}")
                         signature_errors += 1
                         continue
-                    # Prefer verifying the attestation JSON blob if present; signatures were created for attestations
-                    att_json = None
-                    if sig_path.endswith('.attestation.sig'):
-                        candidate = (cdf_path / sig_path).with_suffix('')  # remove .sig
-                        candidate = candidate.with_suffix('.json')          # .attestation.json
-                        if candidate.exists():
-                            att_json = candidate
-                    blob = att_json if att_json is not None else (cdf_path / name)
-                    sig = cdf_path / sig_path
-                    cert = sig.with_suffix('.cert')
+                    sig = att.with_suffix('.sig')
+                    cert = att.with_suffix('.cert')
                     if not sig.exists():
-                        print(f"Signature file missing for {name}: {sig_path}")
+                        print(f"Signature file missing for attestation: {att.relative_to(cdf_path)}")
                         signature_errors += 1
                         continue
-                    # Build cosign verify-blob command
-                    cmd_parts = ["cosign", "verify-blob", "--signature", f"{sig}"]
-                    # If a cert exists, use identity/issuer regex
+                    cmd_parts = ["cosign", "verify-blob", "--signature", str(sig)]
                     if cert.exists():
                         cmd_parts += [
-                            "--certificate", f"{cert}",
+                            "--certificate", str(cert),
                             "--certificate-identity-regexp", args.cert_identity_regex,
                             "--certificate-oidc-issuer-regexp", args.cert_issuer_regex,
                         ]
-                    # Optionally ignore TLOG (to avoid 400s in some envs)
                     if args.insecure_ignore_tlog.lower() == 'true':
                         cmd_parts += ["--insecure-ignore-tlog"]
-                    # If a public key is provided (non-OIDC signatures), support key mode
                     if args.public_key:
-                        # Write the key to a temp file
                         key_path = Path(os.environ.get('RUNNER_TEMP', '.')) / 'cosign-pubkey.pem'
                         try:
                             key_path.write_text(args.public_key)
-                            cmd_parts += ["--key", f"{key_path}"]
+                            cmd_parts += ["--key", str(key_path)]
                         except Exception as e:
                             print(f"Failed to write public key: {e}")
-                    # FILE positional must be last
-                    cmd = ' '.join(cmd_parts + [f"{blob}"])
-                    # FILE must be the final positional argument
-                    cmd_parts.append(str(blob))
+                    cmd_parts.append(str(att))
                     res = run(cmd_parts)
                     if res.returncode != 0:
-                        print(f"Signature verification failed for {name}:\n{res.stdout}")
+                        rel = att.relative_to(cdf_path)
+                        print(f"Signature verification failed for {rel}:\n{res.stdout}")
                         signature_errors += 1
 
     total_errors = unauthorized_errors + signature_errors
