@@ -130,14 +130,19 @@ def main():
         # Signature validation via cosign when possible and not skipped
         if args.skip_signature_validation.lower() != 'true':
             if not is_cosign_available():
-                print('cosign not available; skipping signature validation')
+                print('cosign not available; signature validation required but tool missing')
+                signature_errors += 1
             else:
                 for f in meta['files']:
                     name = f.get('name')
                     sig_path = f.get('signature')
-                    if not name or not sig_path:
+                    if not name:
                         continue
                     blob = cdf_path / name
+                    if not sig_path:
+                        print(f"Missing signature reference in metadata for {name}")
+                        signature_errors += 1
+                        continue
                     sig = cdf_path / sig_path
                     cert = sig.with_suffix('.cert')
                     if not sig.exists():
