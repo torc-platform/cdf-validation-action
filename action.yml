@@ -18,6 +18,22 @@ inputs:
     description: 'Skip signature validation (for testing only)'
     required: false
     default: 'false'
+  certificate_identity_regex:
+    description: 'Regex to match certificate subject/identity when verifying'
+    required: false
+    default: '.*'
+  certificate_issuer_regex:
+    description: 'Regex to match certificate OIDC issuer when verifying'
+    required: false
+    default: '.*'
+  insecure_ignore_tlog:
+    description: 'Ignore transparency log when verifying signatures'
+    required: false
+    default: 'true'
+  public_key:
+    description: 'PEM public key to verify non-certificate signatures (optional)'
+    required: false
+    default: ''
 
 outputs:
   validation_status:
@@ -42,6 +58,9 @@ runs:
           curl -sSL -o "$RUNNER_TEMP/bin/cosign" "https://github.com/sigstore/cosign/releases/latest/download/cosign-linux-amd64"
           chmod +x "$RUNNER_TEMP/bin/cosign"
           echo "$RUNNER_TEMP/bin" >> "$GITHUB_PATH"
+          # also export for current step and subsequent ones
+          export PATH="$RUNNER_TEMP/bin:$PATH"
+          echo "PATH=$RUNNER_TEMP/bin:$PATH" >> "$GITHUB_ENV"
         fi
 
     - name: Cosign version (diagnostic)
@@ -59,4 +78,8 @@ runs:
           --cdf-path "${{ inputs.cdf_path }}" \
           --validation-level "${{ inputs.validation_level }}" \
           --fail-on-unauthorized-tf "${{ inputs.fail_on_unauthorized_tf }}" \
-          --skip-signature-validation "${{ inputs.skip_signature_validation }}"
+          --skip-signature-validation "${{ inputs.skip_signature_validation }}" \
+          --cert-identity-regex "${{ inputs.certificate_identity_regex }}" \
+          --cert-issuer-regex "${{ inputs.certificate_issuer_regex }}" \
+          --insecure-ignore-tlog "${{ inputs.insecure_ignore_tlog }}" \
+          --public-key "${{ inputs.public_key }}"

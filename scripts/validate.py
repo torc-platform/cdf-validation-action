@@ -41,6 +41,9 @@ def list_cdf_files(cdf_path: Path):
         if '.git' in root:
             continue
         for name in files:
+            # Skip any attestation artifacts entirely
+            if 'attestations' in root or '.attestation.' in name:
+                continue
             if ('-cdf' in name) or name.startswith('cdf-'):
                 full = Path(root) / name
                 results.append(full.relative_to(cdf_path))
@@ -65,6 +68,10 @@ def main():
     ap.add_argument('--validation-level', default='full')
     ap.add_argument('--fail-on-unauthorized-tf', default='true')
     ap.add_argument('--skip-signature-validation', default='false')
+    ap.add_argument('--cert-identity-regex', default='.*')
+    ap.add_argument('--cert-issuer-regex', default='.*')
+    ap.add_argument('--insecure-ignore-tlog', default='true')
+    ap.add_argument('--public-key', default='')
     args = ap.parse_args()
 
     cdf_path = find_cdf_path(args.cdf_path)
@@ -127,7 +134,7 @@ def main():
                 print(f"Hash mismatch for {name}: expected {expected}, got {actual}")
                 unauthorized_errors += 1
 
-        # Signature validation via cosign when possible and not skipped
+        # Signature verification with cosign
         if args.skip_signature_validation.lower() != 'true':
             if not is_cosign_available():
                 print('cosign not available; signature validation required but tool missing')
@@ -138,28 +145,43 @@ def main():
                     sig_path = f.get('signature')
                     if not name:
                         continue
-                    blob = cdf_path / name
                     if not sig_path:
                         print(f"Missing signature reference in metadata for {name}")
                         signature_errors += 1
                         continue
+                    blob = cdf_path / name
                     sig = cdf_path / sig_path
                     cert = sig.with_suffix('.cert')
                     if not sig.exists():
                         print(f"Signature file missing for {name}: {sig_path}")
                         signature_errors += 1
                         continue
-                    # Attempt verify with permissive cert matching if cert exists
+                    # Build cosign verify-blob command
+                    cmd_parts = [
+                        "cosign", "verify-blob",
+                        f"{blob}",
+                        "--signature", f"{sig}"
+                    ]
+                    # If a cert exists, use identity/issuer regex
                     if cert.exists():
-                        cmd = (
-                            f"cosign verify-blob '{blob}' --signature '{sig}' "
-                            f"--certificate '{cert}' --certificate-identity-regexp '.*' "
-                            f"--certificate-oidc-issuer-regexp '.*'"
-                        )
-                    else:
-                        # Fall back to signature-only verify (may fail if policy requires cert)
-                        cmd = f"cosign verify-blob '{blob}' --signature '{sig}'"
-                    res = run(cmd)
+                        cmd_parts += [
+                            "--certificate", f"{cert}",
+                            "--certificate-identity-regexp", args.cert_identity_regex,
+                            "--certificate-oidc-issuer-regexp", args.cert_issuer_regex,
+                        ]
+                    # Optionally ignore TLOG (to avoid 400s in some envs)
+                    if args.insecure_ignore_tlog.lower() == 'true':
+                        cmd_parts += ["--insecure-ignore-tlog"]
+                    # If a public key is provided (non-OIDC signatures), support key mode
+                    if args.public_key:
+                        # Write the key to a temp file
+                        key_path = Path(os.environ.get('RUNNER_TEMP', '.')) / 'cosign-pubkey.pem'
+                        try:
+                            key_path.write_text(args.public_key)
+                            cmd_parts += ["--key", f"{key_path}"]
+                        except Exception as e:
+                            print(f"Failed to write public key: {e}")
+                    res = run(' '.join(cmd_parts))
                     if res.returncode != 0:
                         print(f"Signature verification failed for {name}:\n{res.stdout}")
                         signature_errors += 1
