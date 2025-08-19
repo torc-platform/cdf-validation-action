@@ -33,11 +33,6 @@ outputs:
 runs:
   using: 'composite'
   steps:
-    - name: Ensure Python is available
-      uses: actions/setup-python@v4
-      with:
-        python-version: '3.11'
-
     - name: Ensure cosign available (no sudo)
       shell: bash
       run: |
@@ -60,7 +55,7 @@ runs:
       id: run-validate
       shell: bash
       run: |
-        python "${{ github.action_path }}/scripts/validate.py" \
+        python3 "${{ github.action_path }}/scripts/validate.py" \
           --cdf-path "${{ inputs.cdf_path }}" \
           --validation-level "${{ inputs.validation_level }}" \
           --fail-on-unauthorized-tf "${{ inputs.fail_on_unauthorized_tf }}" \
