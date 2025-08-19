@@ -94,7 +94,7 @@ def main():
         try:
             meta = json.loads(meta_path.read_text())
         except Exception as e:
-            print(f"Invalid cdf-meta.json: {e}")
+            print(f"❌ Invalid cdf-meta.json: {e}")
             unauthorized_errors += 1
 
     # Count CDF files by naming convention for reporting
@@ -112,7 +112,7 @@ def main():
         if args.fail_on_unauthorized_tf.lower() == 'true':
             tf_files = list_tf_files(cdf_path)
             for tf in tf_files:
-                print(f"Authorized TF file: {tf}")
+                print(f"✅ Authorized TF file: {tf}")
 
         # Hash verification
         for f in meta['files']:
@@ -125,7 +125,7 @@ def main():
                 continue
             p = cdf_path / name
             if not p.exists():
-                print(f"❌ Missing file listed in metadata: {name}")
+                print(f"⚠️ Missing file listed in metadata: {name}")
                 unauthorized_errors += 1
                 continue
             actual = sha256_file(p)
@@ -156,7 +156,7 @@ def main():
                             else:
                                 print(f"✅ Found required attestation field: {req}")
                     except Exception as e:
-                        print(f"❌ Invalid attestation JSON {att.relative_to(cdf_path)}: {e}")
+                        print(f"⚠️ Invalid attestation JSON {att.relative_to(cdf_path)}: {e}")
                         signature_errors += 1
                         continue
                     sig = att.with_suffix('.sig')
