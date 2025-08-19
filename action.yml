@@ -22,11 +22,39 @@ inputs:
 outputs:
   validation_status:
     description: 'Validation result: passed, failed, or skipped'
+    value: ${{ steps.run-validate.outputs.validation_status }}
   error_count:
     description: 'Number of validation errors found'
+    value: ${{ steps.run-validate.outputs.error_count }}
   file_count:
     description: 'Number of files validated'
+    value: ${{ steps.run-validate.outputs.file_count }}
 
 runs:
-  using: 'node20'
-  main: 'dist/index.js' 
+  using: 'composite'
+  steps:
+    - name: Ensure Python is available
+      uses: actions/setup-python@v4
+      with:
+        python-version: '3.11'
+
+    - name: Ensure cosign available (no sudo)
+      shell: bash
+      run: |
+        if ! command -v cosign >/dev/null 2>&1; then
+          echo "cosign not found; installing locally..."
+          mkdir -p "$RUNNER_TEMP/bin"
+          curl -sSL -o "$RUNNER_TEMP/bin/cosign" "https://github.com/sigstore/cosign/releases/latest/download/cosign-linux-amd64"
+          chmod +x "$RUNNER_TEMP/bin/cosign"
+          echo "$RUNNER_TEMP/bin" >> "$GITHUB_PATH"
+        fi
+
+    - name: Run validation
+      id: run-validate
+      shell: bash
+      run: |
+        python "${{ github.action_path }}/scripts/validate.py" \
+          --cdf-path "${{ inputs.cdf_path }}" \
+          --validation-level "${{ inputs.validation_level }}" \
+          --fail-on-unauthorized-tf "${{ inputs.fail_on_unauthorized_tf }}" \
+          --skip-signature-validation "${{ inputs.skip_signature_validation }}"
