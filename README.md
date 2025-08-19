@@ -8,7 +8,7 @@ A GitHub Action for validating Cloud Development Framework (CDF) patterns, ensur
 - ✅ **File Integrity Checks**: Verifies SHA256 hashes against cdf-meta.json
 - ✅ **Unauthorized TF Detection**: Prevents unauthorized Terraform files
 - ✅ **Attestation Validation**: Validates SLSA format attestations
-- ✅ **Signature Verification**: Uses Cosign for keyless signature verification
+- ✅ **Signature Verification**: Uses Cosign for key-based signature verification
 - ✅ **Flexible Configuration**: Multiple validation levels and options
 - ✅ **PR Integration**: Automatic commenting and status reporting
 
@@ -117,9 +117,8 @@ jobs:
 - ✅ Signature and certificate files exist
 
 ### 5. Signature Verification
-- ✅ Cosign keyless verification
-- ✅ GitHub OIDC identity verification
-- ✅ Certificate validation
+- ✅ Cosign public-key verification
+- ✅ Optional certificate verification (if certs provided)
 
 ## Error Handling
 
@@ -133,10 +132,10 @@ The action provides detailed error reporting:
 
 ## Security Features
 
-### Keyless Signing
-- Uses GitHub's OIDC for identity verification
-- No private keys to manage
-- Verifies signatures against GitHub's public keys
+### Key-based Verification
+- Uses a Cosign public key to verify signatures
+- No external OIDC dependency
+- Works in restricted/internal networks
 
 ### Unauthorized File Prevention
 - Prevents injection of unauthorized Terraform files

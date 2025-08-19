@@ -283,23 +283,30 @@ main() {
                     continue
                 fi
                 
-                # Get the corresponding certificate file
-                cert_file="${sig_file%.sig}.cert"
-                if [ ! -f "$cert_file" ]; then
-                    log_error "Certificate file not found: $cert_file"
-                    continue
-                fi
-                
-                # Use keyless verification with Cosign
-                if cosign verify-blob "$attestation_file" \
-                    --signature "$sig_file" \
-                    --certificate "$cert_file" \
-                    --certificate-identity-regexp ".*" \
-                    --certificate-oidc-issuer-regexp ".*" 2>/dev/null; then
-                    log_success "Cosign verification passed: $attestation_file"
+                # Prefer public-key verification with Cosign; fallback to certificate if present
+                if [ -n "$PUBLIC_KEY" ]; then
+                    if cosign verify-blob "$attestation_file" \
+                        --signature "$sig_file" \
+                        --key <(echo "$PUBLIC_KEY") 2>/dev/null; then
+                        log_success "Cosign verification passed (public key): $attestation_file"
+                    else
+                        log_error "Cosign verification failed (public key): $attestation_file"
+                    fi
                 else
-                    log_error "Cosign verification failed: $attestation_file"
-                    log_error "  This may indicate a tampered or invalid signature"
+                    cert_file="${sig_file%.sig}.cert"
+                    if [ ! -f "$cert_file" ]; then
+                        log_error "Certificate file not found: $cert_file"
+                        continue
+                    fi
+                    if cosign verify-blob "$attestation_file" \
+                        --signature "$sig_file" \
+                        --certificate "$cert_file" \
+                        --certificate-identity-regexp ".*" \
+                        --certificate-oidc-issuer-regexp ".*" 2>/dev/null; then
+                        log_success "Cosign verification passed (certificate): $attestation_file"
+                    else
+                        log_error "Cosign verification failed (certificate): $attestation_file"
+                    fi
                 fi
             done <<< "$SIGNATURE_FILES"
         else

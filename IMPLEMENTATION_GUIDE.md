@@ -5,7 +5,7 @@
 This GitHub Action provides comprehensive validation for Cloud Development Framework (CDF) patterns, ensuring:
 - ✅ File integrity and tamper detection
 - ✅ Prevention of unauthorized Terraform files
-- ✅ Signature verification using keyless signing
+- ✅ Signature verification using key-based Cosign verification
 - ✅ Centralized governance and enforcement
 
 ## Quick Start
@@ -58,11 +58,11 @@ The action prevents injection of unauthorized Terraform files by:
     fail_on_unauthorized_tf: 'true'
 ```
 
-### 🔐 **Keyless Signature Verification**
+### 🔐 **Key-based Signature Verification**
 
-Uses GitHub's OIDC for identity verification:
-- No private keys to manage
-- Verifies signatures against GitHub's public keys
+Uses Cosign public-key verification:
+- Provide a Cosign public key to verify signatures
+- Works in restricted networks without OIDC
 - Validates attestation structure (SLSA format)
 
 ### 📋 **Flexible Validation Levels**
@@ -166,11 +166,11 @@ The action prevents security risks by:
 - Signature verification using Cosign
 - Certificate validation
 
-### 3. Keyless Signing Benefits
+### 3. Key-based Verification Notes
 
-- No private key management
-- Uses GitHub's OIDC for identity
-- Verifiable signatures
+- Verify with a provided Cosign public key
+- No dependency on OIDC identity/certificates
+- Compatible with TLS-intercepting proxies
 
 ## Troubleshooting
 
