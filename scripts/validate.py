@@ -3,13 +3,14 @@ import argparse
 import json
 import os
 import subprocess
+import shutil
 import sys
 from pathlib import Path
 import hashlib
 
 
-def run(cmd):
-    return subprocess.run(cmd, shell=True, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True)
+def run(cmd_args):
+    return subprocess.run(cmd_args, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True)
 
 
 def find_cdf_path(explicit: str) -> Path:
@@ -59,7 +60,7 @@ def sha256_file(path: Path) -> str:
 
 
 def is_cosign_available() -> bool:
-    return run('command -v cosign').returncode == 0
+    return shutil.which('cosign') is not None
 
 
 def main():
@@ -182,7 +183,7 @@ def main():
                             print(f"Failed to write public key: {e}")
                     # FILE positional must be last
                     cmd = ' '.join(cmd_parts + [f"{blob}"])
-                    res = run(cmd)
+                    res = run(cmd_parts)
                     if res.returncode != 0:
                         print(f"Signature verification failed for {name}:\n{res.stdout}")
                         signature_errors += 1
