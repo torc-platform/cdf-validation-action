@@ -69,7 +69,9 @@ def main():
     ap.add_argument('--cert-issuer-regex', default='.*')
     ap.add_argument('--insecure-ignore-tlog', default='true')
     ap.add_argument('--public-key', default='')
+    ap.add_argument('--verbose', default='false')
     args = ap.parse_args()
+    verbose = args.verbose.lower() == 'true'
 
     cdf_path = find_cdf_path(args.cdf_path)
     if not cdf_path or not cdf_path.exists():
@@ -132,6 +134,8 @@ def main():
             if actual != expected:
                 print(f"Hash mismatch for {name}: expected {expected}, got {actual}")
                 unauthorized_errors += 1
+            elif verbose:
+                print(f"Hash matches for {name}")
 
         # Signature verification with cosign over attestation JSONs
         if args.skip_signature_validation.lower() != 'true':
@@ -140,13 +144,20 @@ def main():
                 signature_errors += 1
             else:
                 # Enumerate all attestation JSONs, validate structure, and verify signatures
+                attested_total = 0
+                attested_passed = 0
                 for att in sorted(cdf_path.rglob('*.attestation.json')):
+                    attested_total += 1
+                    if verbose:
+                        print(f"Validating attestation: {att.relative_to(cdf_path)}")
                     try:
                         obj = json.loads(att.read_text())
                         for req in ["_type", "subject", "predicateType", "predicate"]:
                             if req not in obj:
                                 print(f"Attestation missing field {req}: {att.relative_to(cdf_path)}")
                                 signature_errors += 1
+                            elif verbose:
+                                print(f"✅ Found required attestation field: {req}")
                     except Exception as e:
                         print(f"Invalid attestation JSON {att.relative_to(cdf_path)}: {e}")
                         signature_errors += 1
@@ -179,6 +190,13 @@ def main():
                         rel = att.relative_to(cdf_path)
                         print(f"Signature verification failed for {rel}:\n{res.stdout}")
                         signature_errors += 1
+                    else:
+                        attested_passed += 1
+                        if verbose:
+                            print(f"✅ Cosign verification passed: {att.relative_to(cdf_path)}")
+
+                # Summary
+                print(f"Cosign verified {attested_passed}/{attested_total} attestation(s)")
 
     total_errors = unauthorized_errors + signature_errors
     status = 'passed' if total_errors == 0 else 'failed'
