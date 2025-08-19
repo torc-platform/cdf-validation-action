@@ -26,10 +26,10 @@ on:
 
 jobs:
   validate:
-    runs-on: ubuntu-latest
+    runs-on: self-hosted
     steps:
       - uses: actions/checkout@v4
-      - uses: ./.github/actions/kickstart-validate-action
+      - uses: torc-platform/cdf-validate-action@main
         with:
           validation_level: 'full'
           fail_on_unauthorized_tf: 'true'
@@ -91,10 +91,10 @@ on:
 
 jobs:
   validate:
-    runs-on: ubuntu-latest
+    runs-on: self-hosted
     steps:
       - uses: actions/checkout@v4
-      - uses: ./.github/actions/kickstart-validate-action
+      - uses: torc-platform/cdf-validate-action@main
         id: validation
       
       - name: Fail on validation error
@@ -109,13 +109,13 @@ jobs:
 ```yaml
 jobs:
   validate-patterns:
-    runs-on: ubuntu-latest
+    runs-on: self-hosted
     strategy:
       matrix:
         pattern: [pattern1, pattern2, pattern3]
     steps:
       - uses: actions/checkout@v4
-      - uses: ./.github/actions/kickstart-validate-action
+      - uses: torc-platform/cdf-validate-action@main
         with:
           cdf_path: ${{ matrix.pattern }}
 ```
