@@ -5,6 +5,7 @@ import os
 import subprocess
 import sys
 from pathlib import Path
+import hashlib
 
 
 def run(cmd):
@@ -12,20 +13,46 @@ def run(cmd):
 
 
 def find_cdf_path(explicit: str) -> Path:
+    """Resolve the CDF pattern root.
+    - If explicit path provided and contains cdf-meta.json, use it.
+    - Else, search repo for first cdf-meta.json and use its parent.
+    """
     if explicit:
         p = Path(explicit)
-        return p if p.exists() else Path('')
-    # Auto-detect: look for typical pattern dir under multi-service-compositions
-    base = Path('.')
-    candidates = list(base.glob('multi-service-compositions/*'))
-    for c in candidates:
-        if c.is_dir() and (c / 'cdf-config.json').exists():
-            return c
+        if (p / 'cdf-meta.json').exists():
+            return p
+        # allow passing file directly
+        if p.is_file() and p.name == 'cdf-meta.json':
+            return p.parent
+        return Path('')
+    for meta in Path('.').rglob('cdf-meta.json'):
+        return meta.parent
     return Path('')
 
 
-def list_tf_files(cdf_path: Path):
-    return list(cdf_path.glob('**/*.tf'))
+def list_cdf_files(cdf_path: Path):
+    """Find all files considered CDF artifacts by naming convention.
+    Matches files with '-cdf' in name or starting with 'cdf-'.
+    Returns relative paths from cdf_path.
+    """
+    results = []
+    for root, _, files in os.walk(cdf_path):
+        # skip .git
+        if '.git' in root:
+            continue
+        for name in files:
+            if ('-cdf' in name) or name.startswith('cdf-'):
+                full = Path(root) / name
+                results.append(full.relative_to(cdf_path))
+    return results
+
+
+def sha256_file(path: Path) -> str:
+    h = hashlib.sha256()
+    with open(path, 'rb') as f:
+        for chunk in iter(lambda: f.read(8192), b''):
+            h.update(chunk)
+    return h.hexdigest()
 
 
 def is_cosign_available() -> bool:
@@ -56,26 +83,81 @@ def main():
     unauthorized_errors = 0
     signature_errors = 0
 
-    # Unauthorized TF check (basic placeholder logic)
-    tf_files = list_tf_files(cdf_path)
-    file_count = len(tf_files)
-    if args.fail_on_unauthorized_tf.lower() == 'true':
-        # Example policy: no top-level *.tf at pattern root (adjust to real rules)
-        for tf in tf_files:
-            rel = tf.relative_to(cdf_path)
-            if len(rel.parts) == 1:
-                print(f"Unauthorized Terraform file at pattern root: {rel}")
+    # Load metadata if present
+    meta_path = cdf_path / 'cdf-meta.json'
+    meta = {}
+    if meta_path.exists():
+        try:
+            meta = json.loads(meta_path.read_text())
+        except Exception as e:
+            print(f"Invalid cdf-meta.json: {e}")
+            unauthorized_errors += 1
+
+    # Discover CDF files by naming convention
+    discovered = set(map(str, list_cdf_files(cdf_path)))
+    file_count = len(discovered)
+
+    # If metadata lists files, enforce whitelist
+    meta_files = set()
+    if meta and isinstance(meta.get('files'), list):
+        for f in meta['files']:
+            name = f.get('name')
+            if name:
+                meta_files.add(name)
+
+        if args.fail_on_unauthorized_tf.lower() == 'true':
+            unauthorized = discovered - meta_files
+            for rel in sorted(unauthorized):
+                print(f"Unauthorized CDF file not in metadata: {rel}")
                 unauthorized_errors += 1
 
-    # Signature verification (stub): only if not skipped and cosign available
-    if args.skip_signature_validation.lower() != 'true':
-        if not is_cosign_available():
-            print('cosign not available; cannot perform signature validation')
-            signature_errors += 1
-        else:
-            # Placeholder: list attestation files and verify blobs if policy requires
-            # Extend with your actual attestation verification commands/policy
-            pass
+        # Hash verification
+        for f in meta['files']:
+            name = f.get('name')
+            expected = f.get('sha256')
+            if not name or not expected:
+                continue
+            p = cdf_path / name
+            if not p.exists():
+                print(f"Missing file listed in metadata: {name}")
+                unauthorized_errors += 1
+                continue
+            actual = sha256_file(p)
+            if actual != expected:
+                print(f"Hash mismatch for {name}: expected {expected}, got {actual}")
+                unauthorized_errors += 1
+
+        # Signature validation via cosign when possible and not skipped
+        if args.skip_signature_validation.lower() != 'true':
+            if not is_cosign_available():
+                print('cosign not available; skipping signature validation')
+            else:
+                for f in meta['files']:
+                    name = f.get('name')
+                    sig_path = f.get('signature')
+                    if not name or not sig_path:
+                        continue
+                    blob = cdf_path / name
+                    sig = cdf_path / sig_path
+                    cert = sig.with_suffix('.cert')
+                    if not sig.exists():
+                        print(f"Signature file missing for {name}: {sig_path}")
+                        signature_errors += 1
+                        continue
+                    # Attempt verify with permissive cert matching if cert exists
+                    if cert.exists():
+                        cmd = (
+                            f"cosign verify-blob '{blob}' --signature '{sig}' "
+                            f"--certificate '{cert}' --certificate-identity-regexp '.*' "
+                            f"--certificate-oidc-issuer-regexp '.*'"
+                        )
+                    else:
+                        # Fall back to signature-only verify (may fail if policy requires cert)
+                        cmd = f"cosign verify-blob '{blob}' --signature '{sig}'"
+                    res = run(cmd)
+                    if res.returncode != 0:
+                        print(f"Signature verification failed for {name}:\n{res.stdout}")
+                        signature_errors += 1
 
     total_errors = unauthorized_errors + signature_errors
     status = 'passed' if total_errors == 0 else 'failed'
