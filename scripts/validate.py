@@ -192,8 +192,7 @@ def main():
                         signature_errors += 1
                     else:
                         attested_passed += 1
-                        if verbose:
-                            print(f"✅ Cosign verification passed: {att.relative_to(cdf_path)}")
+                        print(f"✅ Cosign verification passed: {att.relative_to(cdf_path)}")
 
                 # Summary
                 print(f"Cosign verified {attested_passed}/{attested_total} attestation(s)")
