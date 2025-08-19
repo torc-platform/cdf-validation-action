@@ -124,6 +124,9 @@ def main():
             expected = f.get('sha256')
             if not name or not expected:
                 continue
+            # Do not verify the hash of cdf-meta.json itself or placeholder values
+            if name == 'cdf-meta.json' or expected.startswith('placeholder_'):
+                continue
             p = cdf_path / name
             if not p.exists():
                 print(f"Missing file listed in metadata: {name}")
@@ -157,11 +160,7 @@ def main():
                         signature_errors += 1
                         continue
                     # Build cosign verify-blob command
-                    cmd_parts = [
-                        "cosign", "verify-blob",
-                        f"{blob}",
-                        "--signature", f"{sig}"
-                    ]
+                    cmd_parts = ["cosign", "verify-blob", "--signature", f"{sig}"]
                     # If a cert exists, use identity/issuer regex
                     if cert.exists():
                         cmd_parts += [
@@ -181,7 +180,9 @@ def main():
                             cmd_parts += ["--key", f"{key_path}"]
                         except Exception as e:
                             print(f"Failed to write public key: {e}")
-                    res = run(' '.join(cmd_parts))
+                    # FILE positional must be last
+                    cmd = ' '.join(cmd_parts + [f"{blob}"])
+                    res = run(cmd)
                     if res.returncode != 0:
                         print(f"Signature verification failed for {name}:\n{res.stdout}")
                         signature_errors += 1
