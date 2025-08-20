@@ -37,6 +37,7 @@ jobs:
           validation_level: 'full'
           fail_on_unauthorized_tf: 'true'
           skip_signature_validation: 'false'
+          public_key: ${{ secrets.COSIGN_PUBLIC_KEY_PEM }}
         id: validation
 
       - name: Check validation status
