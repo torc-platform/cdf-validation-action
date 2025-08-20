@@ -6,6 +6,7 @@ import subprocess
 import shutil
 import sys
 from pathlib import Path
+import base64
 import hashlib
 
 
@@ -135,6 +136,37 @@ def main():
             else:
                 print(f"✅ Hash matches for {name}")
 
+        # Prepare public key content (input > env > repo file)
+        key_content = args.public_key
+        if not key_content:
+            env_pem = os.environ.get('COSIGN_PUBLIC_KEY_PEM', '')
+            if env_pem:
+                key_content = env_pem
+        if not key_content:
+            env_b64 = os.environ.get('COSIGN_PUBLIC_KEY_B64', '')
+            if env_b64:
+                try:
+                    key_content = base64.b64decode(env_b64).decode('utf-8')
+                except Exception as e:
+                    print(f"Failed to decode COSIGN_PUBLIC_KEY_B64: {e}")
+        if not key_content:
+            for candidate in [Path('.github/keys/cosign.pub'), cdf_path / '.github/keys/cosign.pub']:
+                try:
+                    if candidate.exists():
+                        key_content = candidate.read_text()
+                        break
+                except Exception:
+                    pass
+
+        pubkey_file = None
+        if key_content:
+            try:
+                pubkey_file = Path(os.environ.get('RUNNER_TEMP', '.')) / 'cosign-pubkey.pem'
+                pubkey_file.write_text(key_content)
+                print("Using public key from inputs/env/repo for verification")
+            except Exception as e:
+                print(f"Failed to write public key: {e}")
+
         # Signature verification with cosign over attestation JSONs
         if args.skip_signature_validation.lower() != 'true':
             if not is_cosign_available():
@@ -174,13 +206,8 @@ def main():
                         ]
                     if args.insecure_ignore_tlog.lower() == 'true':
                         cmd_parts += ["--insecure-ignore-tlog"]
-                    if args.public_key:
-                        key_path = Path(os.environ.get('RUNNER_TEMP', '.')) / 'cosign-pubkey.pem'
-                        try:
-                            key_path.write_text(args.public_key)
-                            cmd_parts += ["--key", str(key_path)]
-                        except Exception as e:
-                            print(f"Failed to write public key: {e}")
+                    if pubkey_file and pubkey_file.exists():
+                        cmd_parts += ["--key", str(pubkey_file)]
                     cmd_parts.append(str(att))
                     res = run(cmd_parts)
                     if res.returncode != 0:

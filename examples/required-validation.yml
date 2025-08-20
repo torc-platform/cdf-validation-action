@@ -30,14 +30,22 @@ jobs:
         with:
           fetch-depth: 0
 
+      - name: Decode Cosign public key (base64 → PEM)
+        id: cosign_key
+        shell: bash
+        run: |
+          echo "pem<<EOF" >> "$GITHUB_OUTPUT"
+          echo "${{ secrets.COSIGN_PUBLIC_KEY_B64 }}" | base64 -d >> "$GITHUB_OUTPUT"
+          echo "EOF" >> "$GITHUB_OUTPUT"
+
       - name: Validate CDF Pattern
-        uses: ./.github/actions/kickstart-validate-action
+        uses: ENG-TD-Universe/cdf-validation-action@main
         with:
           cdf_path: ${{ github.event.inputs.cdf_path || '' }}
           validation_level: 'full'
           fail_on_unauthorized_tf: 'true'
           skip_signature_validation: 'false'
-          public_key: ${{ secrets.COSIGN_PUBLIC_KEY_PEM }}
+          public_key: ${{ steps.cosign_key.outputs.pem }}
         id: validation
 
       - name: Check validation status
