@@ -11,7 +11,21 @@ import hashlib
 
 
 def run(cmd_args):
-    return subprocess.run(cmd_args, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True)
+    try:
+        return subprocess.run(
+            cmd_args,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.STDOUT,
+            text=True,
+        )
+    except TypeError:
+        # Python 3.6 compatibility: 'text' not supported, use universal_newlines
+        return subprocess.run(
+            cmd_args,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.STDOUT,
+            universal_newlines=True,
+        )
 
 
 def find_cdf_path(explicit: str) -> Path:
